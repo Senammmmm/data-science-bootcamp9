@@ -1,0 +1,92 @@
+Sub copy_data_to_new_books()
+
+    Dim count_col As Integer
+    Dim count_row As Integer
+    Dim og As Worksheet
+    Dim wb As Workbook 'new workbook
+    Dim company As Variant ' Changed to Variant to avoid the compile error
+    Dim companies As Collection
+    Dim cell As Range
+    Dim formattedDate As String
+    Dim yearPart As String
+    Dim monthPart As String
+    Dim folderPath As String
+
+    ' Initialize the original worksheet
+    Set og = Sheet1 'refer to the sheet not the name
+
+    ' Generate formatted date string
+    yearPart = Format(Right(CLng(og.Range("G2").Value) + 543, 2), "00")
+    monthPart = Format(og.Range("F2").Value, "00")
+
+    ' Define the folder path using yearPart and monthPart
+    folderPath = "D:\Automate\" & yearPart & monthPart & "\"
+
+    ' Check if the folder exists, and create it if it doesn't
+    If Dir(folderPath, vbDirectory) = "" Then
+        MkDir folderPath
+    End If
+
+    ' Create a collection to store unique companies
+    Set companies = New Collection
+
+    ' Loop through the column containing companies (assuming column N)
+    On Error Resume Next ' Ignore errors when adding duplicate companies
+    For Each cell In og.Range("N2:N" & og.Cells(og.Rows.Count, 14).End(xlUp).Row)
+        If cell.Value <> "" Then
+            companies.Add cell.Value, CStr(cell.Value)
+        End If
+    Next cell
+    On Error GoTo 0 ' Reset error handling
+
+    ' Loop through each unique company
+    For Each company In companies
+
+        ' Add a new workbook
+        Set wb = Workbooks.Add
+        wb.Sheets("Sheet1").Name = "Sheet1"
+
+        ' Activate the original sheet and count columns/rows
+        og.Activate
+        count_col = WorksheetFunction.CountA(og.Range("A1", og.Range("A1").End(xlToRight)))
+        count_row = WorksheetFunction.CountA(og.Range("A1", og.Range("A1").End(xlDown)))
+
+        ' Apply filter for the current company
+        og.Range("A1").AutoFilter Field:=14, Criteria1:=company
+
+        ' Copy filtered data from the original sheet
+        og.Range(og.Cells(1, 1), og.Cells(count_row, count_col)). _
+        SpecialCells(xlCellTypeVisible).Copy
+
+        ' Check if data is copied
+        If Application.CutCopyMode = False Then
+            MsgBox "No data copied.", vbExclamation
+            Exit Sub
+        End If
+
+        ' Paste copied data into the new workbook
+        wb.Sheets("Sheet1").Cells(1, 1).PasteSpecial xlPasteValues
+
+        Application.CutCopyMode = False
+
+        ' Remove the filter and reset
+        og.ShowAllData
+
+        ' Adjust columns in the new workbook
+        wb.Activate
+        Cells.Select
+        Cells.EntireColumn.AutoFit
+        Range("A1").Select
+
+        ' Generate formatted date string for file name
+        formattedDate = "Attendance_" & company & "_" & yearPart & monthPart & ".xlsx"
+
+        ' Save and close the new workbook
+        Application.DisplayAlerts = False
+        wb.SaveAs folderPath & formattedDate
+        wb.Close SaveChanges:=False
+        Application.DisplayAlerts = True
+
+    Next company
+
+End Sub
